@@ -44,4 +44,124 @@ int main() {
 
     return 0;
 }
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// --- Estrutura que representa uma sala (nó da árvore binária) ---
+struct No
+{
+    char valor[50];           // nome do cômodo
+    struct No *esquerda;      // caminho à esquerda
+    struct No *direita;       // caminho à direita
+};
+
+// --- Função criarSala(): cria dinamicamente uma sala com o nome informado ---
+struct No *criarSala(char *valor)
+{
+    struct No *novo = (struct No *)malloc(sizeof(struct No));
+    if (novo == NULL)
+    {
+        printf("Erro ao alocar memória!\n");
+        exit(1);
+    }
+    strcpy(novo->valor, valor);
+    novo->esquerda = NULL;
+    novo->direita = NULL;
+    return novo;
+}
+
+// --- Função para percorrer em pré-ordem (usada apenas para depuração, se desejar) ---
+void preOrdem(struct No *raiz)
+{
+    if (raiz != NULL)
+    {
+        printf("%s ", raiz->valor);
+        preOrdem(raiz->esquerda);
+        preOrdem(raiz->direita);
+    }
+}
+
+// --- Função liberar(): libera memória da árvore ---
+void liberar(struct No *raiz)
+{
+    if (raiz != NULL)
+    {
+        liberar(raiz->esquerda);
+        liberar(raiz->direita);
+        free(raiz);
+    }
+}
+
+// --- Função explorarSalas(): navegação interativa do jogador ---
+void explorarSalas(struct No *raiz)
+{
+    struct No *atual = raiz;
+    char escolha;
+
+    printf("\nVocê está no %s.\n", atual->valor);
+
+    // Loop até chegar a um nó sem filhos (nó-folha)
+    while (1)
+    {
+        if (atual->esquerda == NULL && atual->direita == NULL)
+        {
+            printf("\nVocê chegou ao fim do caminho, não há mais portas.\n");
+            printf("Você está em: %s.\n", atual->valor);
+            break;
+        }
+
+        printf("\nVocê está em: %s\n", atual->valor);
+        printf("Caminhos disponíveis:\n");
+        if (atual->esquerda != NULL)
+            printf("  [e] Esquerda -> %s\n", atual->esquerda->valor);
+        if (atual->direita != NULL)
+            printf("  [d] Direita  -> %s\n", atual->direita->valor);
+
+        printf("Escolha um caminho (e/d): ");
+        scanf(" %c", &escolha);
+
+        if (escolha == 'e' || escolha == 'E')
+        {
+            if (atual->esquerda != NULL)
+                atual = atual->esquerda;
+            else
+                printf("Não há caminho à esquerda!\n");
+        }
+        else if (escolha == 'd' || escolha == 'D')
+        {
+            if (atual->direita != NULL)
+                atual = atual->direita;
+            else
+                printf("Não há caminho à direita!\n");
+        }
+        else
+        {
+            printf("Escolha inválida! Use apenas 'e' ou 'd'.\n");
+        }
+    }
+}
+
+// --- Função principal: monta o mapa e inicia a exploração ---
+int main()
+{
+    // Criação automática do mapa da mansão (árvore binária)
+    struct No *raiz = criarSala("Hall de entrada");
+    raiz->esquerda = criarSala("Sala de estar");
+    raiz->direita = criarSala("Biblioteca");
+    raiz->esquerda->esquerda = criarSala("Cozinha");
+    raiz->esquerda->direita = criarSala("Sala de jantar");
+    raiz->direita->esquerda = criarSala("Escritório");
+    raiz->direita->direita = criarSala("Jardim");
+
+    printf("=== Mapa da Mansão Criado com Sucesso ===\n");
+    printf("Você começará sua exploração pelo Hall de entrada.\n");
+
+    explorarSalas(raiz);
+
+    liberar(raiz);
+    printf("\nMemória liberada. Fim da exploração.\n");
+
+    return 0;
+}
 
