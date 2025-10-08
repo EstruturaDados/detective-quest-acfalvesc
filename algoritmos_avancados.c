@@ -48,11 +48,13 @@ int main() {
 #include <stdlib.h>
 #include <string.h>
 
+#define TAM_HASH 10 // tamanho da tabela hash
+
 // --- Estrutura que representa uma sala da mansão ---
 struct NoSala
 {
     char nome[50];           // nome do cômodo
-    char pista[100];         // pista associada ao cômodo (pode estar vazia)
+    char pista[100];         // pista associada ao cômodo
     struct NoSala *esquerda; // caminho à esquerda
     struct NoSala *direita;  // caminho à direita
 };
@@ -65,7 +67,64 @@ struct NoPista
     struct NoPista *direita;
 };
 
-// --- Função criarSala(): cria dinamicamente uma sala com nome e pista ---
+// --- Estrutura da Tabela Hash (pista -> suspeito) ---
+struct ParPistaSuspeito
+{
+    char pista[100];
+    char suspeito[50];
+    struct ParPistaSuspeito *prox;
+};
+
+// --- Função hash simples (soma dos caracteres) ---
+int hash(char *pista)
+{
+    int soma = 0;
+    for (int i = 0; pista[i] != '\0'; i++)
+        soma += pista[i];
+    return soma % TAM_HASH;
+}
+
+// --- Inserir associação pista-suspeito na tabela hash ---
+void inserirHash(struct ParPistaSuspeito *tabela[], char *pista, char *suspeito)
+{
+    int indice = hash(pista);
+    struct ParPistaSuspeito *novo = (struct ParPistaSuspeito *)malloc(sizeof(struct ParPistaSuspeito));
+    strcpy(novo->pista, pista);
+    strcpy(novo->suspeito, suspeito);
+    novo->prox = tabela[indice];
+    tabela[indice] = novo;
+}
+
+// --- Buscar suspeito associado a uma pista ---
+char *buscarSuspeito(struct ParPistaSuspeito *tabela[], char *pista)
+{
+    int indice = hash(pista);
+    struct ParPistaSuspeito *atual = tabela[indice];
+    while (atual != NULL)
+    {
+        if (strcmp(atual->pista, pista) == 0)
+            return atual->suspeito;
+        atual = atual->prox;
+    }
+    return NULL;
+}
+
+// --- Liberar memória da tabela hash ---
+void liberarHash(struct ParPistaSuspeito *tabela[])
+{
+    for (int i = 0; i < TAM_HASH; i++)
+    {
+        struct ParPistaSuspeito *atual = tabela[i];
+        while (atual != NULL)
+        {
+            struct ParPistaSuspeito *temp = atual;
+            atual = atual->prox;
+            free(temp);
+        }
+    }
+}
+
+// --- Criação das salas e pistas ---
 struct NoSala *criarSala(char *nome, char *pista)
 {
     struct NoSala *novo = (struct NoSala *)malloc(sizeof(struct NoSala));
@@ -81,22 +140,17 @@ struct NoSala *criarSala(char *nome, char *pista)
     return novo;
 }
 
-// --- Função criarNoPista(): cria um nó de pista na BST ---
+// --- Criar nó da árvore de pistas ---
 struct NoPista *criarNoPista(char *pista)
 {
     struct NoPista *novo = (struct NoPista *)malloc(sizeof(struct NoPista));
-    if (novo == NULL)
-    {
-        printf("Erro ao alocar memória para a pista!\n");
-        exit(1);
-    }
     strcpy(novo->pista, pista);
     novo->esquerda = NULL;
     novo->direita = NULL;
     return novo;
 }
 
-// --- Inserir pista na BST em ordem alfabética ---
+// --- Inserir pista na BST ---
 struct NoPista *inserirPista(struct NoPista *raiz, char *pista)
 {
     if (raiz == NULL)
@@ -110,7 +164,7 @@ struct NoPista *inserirPista(struct NoPista *raiz, char *pista)
     return raiz;
 }
 
-// --- Exibir pistas em ordem alfabética (em-ordem) ---
+// --- Exibir pistas em ordem alfabética ---
 void exibirPistasEmOrdem(struct NoPista *raiz)
 {
     if (raiz != NULL)
@@ -121,7 +175,7 @@ void exibirPistasEmOrdem(struct NoPista *raiz)
     }
 }
 
-// --- Liberar memória da árvore de pistas ---
+// --- Liberar memória ---
 void liberarPistas(struct NoPista *raiz)
 {
     if (raiz != NULL)
@@ -131,8 +185,6 @@ void liberarPistas(struct NoPista *raiz)
         free(raiz);
     }
 }
-
-// --- Liberar memória da árvore de salas ---
 void liberarSalas(struct NoSala *raiz)
 {
     if (raiz != NULL)
@@ -143,22 +195,21 @@ void liberarSalas(struct NoSala *raiz)
     }
 }
 
-// --- Função explorarSalas(): navegação interativa do jogador ---
-void explorarSalas(struct NoSala *raiz, struct NoPista **arvorePistas)
+// --- Exploração interativa da mansão ---
+void explorarSalas(struct NoSala *raiz, struct NoPista **arvorePistas, struct ParPistaSuspeito *tabela[])
 {
     struct NoSala *atual = raiz;
     char escolha;
 
     printf("\nVocê está no %s.\n", atual->nome);
 
-    // Se a sala tiver pista, adiciona à BST
+    // mapa rápido de suspeitos associados às pistas
     if (strlen(atual->pista) > 0)
     {
         printf("Você encontrou uma pista: \"%s\"\n", atual->pista);
         *arvorePistas = inserirPista(*arvorePistas, atual->pista);
     }
 
-    // Loop de exploração
     while (1)
     {
         printf("\nVocê está em: %s\n", atual->nome);
@@ -220,10 +271,39 @@ void explorarSalas(struct NoSala *raiz, struct NoPista **arvorePistas)
     }
 }
 
-// --- Função principal: monta o mapa, permite exploração e exibe pistas ---
+// --- Contar quantas pistas ligam a um suspeito ---
+int contarPistasSuspeito(struct NoPista *raiz, struct ParPistaSuspeito *tabela[], char *suspeito)
+{
+    if (raiz == NULL)
+        return 0;
+
+    int contador = 0;
+    char *resp = buscarSuspeito(tabela, raiz->pista);
+    if (resp != NULL && strcmp(resp, suspeito) == 0)
+        contador++;
+
+    contador += contarPistasSuspeito(raiz->esquerda, tabela, suspeito);
+    contador += contarPistasSuspeito(raiz->direita, tabela, suspeito);
+
+    return contador;
+}
+
+// --- Programa principal ---
 int main()
 {
-    // Criação do mapa da mansão com pistas associadas
+    // Tabela hash de pistas e suspeitos
+    struct ParPistaSuspeito *tabela[TAM_HASH] = {NULL};
+
+    // Associações pista -> suspeito
+    inserirHash(tabela, "Pegadas suspeitas no tapete", "Sr. Black");
+    inserirHash(tabela, "Um copo quebrado", "Sra. White");
+    inserirHash(tabela, "Um livro fora do lugar", "Professor Plum");
+    inserirHash(tabela, "Uma faca suja", "Coronel Mustard");
+    inserirHash(tabela, "Um guardanapo com uma inicial", "Srta. Scarlet");
+    inserirHash(tabela, "Uma carta rasgada", "Professor Plum");
+    inserirHash(tabela, "Pegadas na terra molhada", "Sr. Black");
+
+    // Construção da mansão
     struct NoSala *raiz = criarSala("Hall de Entrada", "Pegadas suspeitas no tapete");
     raiz->esquerda = criarSala("Sala de Estar", "Um copo quebrado");
     raiz->direita = criarSala("Biblioteca", "Um livro fora do lugar");
@@ -232,13 +312,13 @@ int main()
     raiz->direita->esquerda = criarSala("Escritório", "Uma carta rasgada");
     raiz->direita->direita = criarSala("Jardim", "Pegadas na terra molhada");
 
-    // Árvore BST das pistas
+    // Árvore BST de pistas coletadas
     struct NoPista *pistas = NULL;
 
-    printf("=== Mapa da Mansão Criado com Sucesso ===\n");
+    printf("=== Mapa da Mansão Criado ===\n");
     printf("Você começará sua exploração pelo Hall de Entrada.\n");
 
-    explorarSalas(raiz, &pistas);
+    explorarSalas(raiz, &pistas, tabela);
 
     printf("\n=== Pistas Coletadas ===\n");
     if (pistas == NULL)
@@ -246,10 +326,27 @@ int main()
     else
         exibirPistasEmOrdem(pistas);
 
+    // --- Fase de acusação ---
+    char acusado[50];
+    printf("\nQuem você acredita ser o culpado? ");
+    scanf(" %[^\n]", acusado);
+
+    int total = contarPistasSuspeito(pistas, tabela, acusado);
+
+    printf("\nAnalisando suas pistas...\n");
+    if (total >= 2)
+        printf("Você acertou! Há %d pistas que indicam %s como o culpado!\n", total, acusado);
+    else if (total == 1)
+        printf("Há apenas uma pista ligando %s ao crime. Pode ser coincidência...\n", acusado);
+    else
+        printf("Nenhuma pista liga %s ao crime. Acusação incorreta!\n", acusado);
+
+    // Liberação de memória
     liberarSalas(raiz);
     liberarPistas(pistas);
+    liberarHash(tabela);
 
-    printf("\nMemória liberada. Fim da exploração.\n");
+    printf("\nMemória liberada. Fim da investigação.\n");
 
     return 0;
 }
